@@ -3,7 +3,7 @@
 x402-compliant marketplace for AI agents. Agents pay USDC (on Base) directly
 over HTTP — no API keys, no signup, no invoices — to buy:
 
-- **Data queries** (`/api/queries`) — paid: fetch a URL, get back title/description/text
+- **Data queries** (`/api/queries`) — paid: fetch a URL for title/description/text, or extract all outbound links (`mode: "links"`)
 - **Storage** (`/api/storage`) — paid file upload / download
 - **Ads** (`/api/ads`) — paid ad impressions/clicks for agent-facing surfaces
 - **Agent registry** (`/api/agents`) — agents register themselves, free tier
@@ -242,24 +242,61 @@ This is also the only way to fully test `/api/storage/upload` — a plain
 `curl` can't complete an x402 payment, so any curl-only test of a paid
 route will only ever get you the 402 response, never the real result.
 
+## Bazaar discovery — already on, needs a public URL to matter
+
+Every route's 402 response already includes a `"bazaar"` block (you can
+see it in the decoded `PAYMENT-REQUIRED` header on any paid request) —
+`createX402Server` auto-injects the Bazaar discovery extension for every
+route in `routeConfig`, with `discoverable` metadata generated from each
+route's `description`. There's no extra code needed on your end; this is
+different from the vanilla `@x402ResourceServer` path, which requires
+manually setting `extensions: { bazaar: { discoverable: true, ... } }`
+per route.
+
+What listing actually requires beyond that:
+1. **A payment has to settle through the facilitator** for a route to
+   appear in the catalog — declaring the route isn't enough by itself.
+   You've already cleared this: the `client/` payments earlier settled
+   real transactions through the CDP facilitator on Base Sepolia.
+2. **A public URL.** The `resource.url` in every 402 response is
+   currently `http://localhost:4021/...` — not reachable by anyone but
+   you. An external agent finding your listing in the Bazaar catalog
+   still needs to actually call that URL to use it, so this only becomes
+   meaningful once the backend is deployed somewhere with a real domain
+   (see the deployment step in the mainnet checklist below).
+3. To enrich what shows up in search/browsing (beyond the minimal
+   auto-generated metadata), you can pass a `bazaar` block to
+   `declareDiscoveryExtension` per route in `x402.js` — see the example
+   in `docs.x402.org`'s seller quickstart, under "Enhance Discovery with
+   Metadata."
+
+You can browse the CDP facilitator's live catalog yourself once
+deployed: `GET https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?payTo=<your address>`.
+
 ## Mainnet checklist
 
 Once you've verified the full buy/sell loop on testnet with `client/`:
 
-1. Flip `CDP_X402_SERVER_ENVIRONMENT=production` in the **backend's** `.env`.
-2. Point `X402_PAY_TO_ADDRESS` at a **real mainnet wallet you control** —
+1. **Deploy the backend somewhere with a public URL and a static IP** —
+   a VPS, a container host, anything reachable from the internet.
+   `localhost` can't be called by real agents or appear meaningfully in
+   Bazaar. Once deployed, add that server's IP to your CDP API key's
+   allowlist (portal.cdp.coinbase.com → the same screen where you opted
+   out of allowlisting for local dev earlier).
+2. Flip `CDP_X402_SERVER_ENVIRONMENT=production` in the **backend's** `.env`.
+3. Point `X402_PAY_TO_ADDRESS` at a **real mainnet wallet you control** —
    double check this address before deploying; mainnet transactions are
    real money.
-3. Fund a **buyer** wallet with real mainnet USDC if you're also testing
+4. Fund a **buyer** wallet with real mainnet USDC if you're also testing
    the client against production — never reuse a testnet-only throwaway
    key from `generate-wallet.mjs` for this.
-4. If you ever swap the CDP SDK for the vanilla `@x402/express` fallback
+5. If you ever swap the CDP SDK for the vanilla `@x402/express` fallback
    above, use `https://api.cdp.coinbase.com/platform/v2/x402` — never
    leave `https://x402.org/facilitator` wired up for production traffic.
-5. Expand `routes/queries.js`'s data source beyond single-page fetches if
+6. Expand `routes/queries.js`'s data source beyond single-page fetches if
    your catalog grows — rate limiting, caching, and a real allowlist of
    fetchable domains are worth adding before this is public-facing.
-6. Re-run the SDK verification step from earlier
+7. Re-run the SDK verification step from earlier
    (`node -e "import('@coinbase/cdp-sdk/x402').then(m => console.log(Object.keys(m)))"`)
    against whatever version `npm install` actually pulled — `latest` in
    `package.json` means it can drift between your dev machine and a

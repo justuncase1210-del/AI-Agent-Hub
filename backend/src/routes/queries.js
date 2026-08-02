@@ -9,16 +9,21 @@ const router = Router();
 
 const querySchema = z.object({
   url: z.string().url(),
+  mode: z.enum(["fetch", "links"]).default("fetch"),
   agentId: z.string().optional(),
 });
 
 /**
  * PAID — protected by x402PaymentMiddleware in index.js ("POST /api/queries").
  *
- * Fetches a URL and returns structured data extracted from the page:
- * title, meta description, and a plain-text snippet of the body. This is
- * the "web data" half of the project — swap fetchPageData for a scraper,
- * search API, database lookup, or automation job runner as your catalog grows.
+ * Two modes on the same priced route:
+ *   - "fetch" (default): title, meta description, plain-text snippet.
+ *   - "links": every outbound <a href> on the page, resolved to absolute
+ *     URLs, deduped.
+ *
+ * Swap fetchPageData/extractLinks for a real scraper, search API, database
+ * lookup, or automation job runner as the catalog grows — the payment gate
+ * and logging around it don't need to change either way.
  */
 router.post("/", async (req, res) => {
   const parsed = querySchema.safeParse(req.body);
@@ -28,11 +33,12 @@ router.post("/", async (req, res) => {
 
   logSettledPayment(req, "queries");
 
-  const { url, agentId } = parsed.data;
+  const { url, mode, agentId } = parsed.data;
 
   let result;
   try {
-    result = await fetchPageData(url);
+    const html = await fetchHtml(url);
+    result = mode === "links" ? extractLinks(html, url) : extractPageData(html);
   } catch (err) {
     // Payment has already settled by the time this handler runs, so a
     // failed fetch still needs a real response — return the error as
@@ -49,15 +55,15 @@ router.post("/", async (req, res) => {
   ).run(
     nanoid(12),
     agentId ?? null,
-    url,
+    `[${mode}] ${url}`,
     req.payment?.payer ?? null,
     req.payment?.amount ?? null
   );
 
-  res.json({ url, result });
+  res.json({ url, mode, result });
 });
 
-async function fetchPageData(url) {
+async function fetchHtml(url) {
   const response = await fetch(url, {
     headers: { "User-Agent": "AI-Agent-Hub/1.0 (+https://github.com)" },
     signal: AbortSignal.timeout(10_000),
@@ -72,9 +78,11 @@ async function fetchPageData(url) {
     throw new Error(`Expected text/html, got ${contentType || "unknown content-type"}`);
   }
 
-  const html = await response.text();
-  const $ = cheerio.load(html);
+  return response.text();
+}
 
+function extractPageData(html) {
+  const $ = cheerio.load(html);
   const title = $("title").first().text().trim();
   const description = $('meta[name="description"]').attr("content")?.trim() || "";
   const bodyText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 1000);
@@ -83,6 +91,28 @@ async function fetchPageData(url) {
     title,
     description,
     textSnippet: bodyText,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+function extractLinks(html, baseUrl) {
+  const $ = cheerio.load(html);
+  const seen = new Set();
+
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+    try {
+      const absolute = new URL(href, baseUrl).toString();
+      seen.add(absolute);
+    } catch {
+      // Malformed href — skip rather than fail the whole request.
+    }
+  });
+
+  return {
+    linkCount: seen.size,
+    links: Array.from(seen).slice(0, 200), // cap payload size
     fetchedAt: new Date().toISOString(),
   };
 }

@@ -4,24 +4,15 @@ import { x402Client } from "@x402/core/client";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
 
-/**
- * Confirmed pattern from x402's own "Quickstart for Buyers" docs:
- *   1. Build a signer from a private key (viem).
- *   2. Create an x402Client and register the exact/EVM scheme with that signer.
- *   3. Wrap fetch with wrapFetchWithPayment — it handles the 402 retry loop
- *      automatically: request -> 402 -> sign payment -> retry with header -> 200.
- *
- * This buys ONE web-data query from ai-agent-hub's /api/queries endpoint.
- */
-
 const privateKey = process.env.EVM_PRIVATE_KEY;
 if (!privateKey) {
-  console.error("Missing EVM_PRIVATE_KEY in client/.env — run `npm run generate-wallet` first.");
+  console.error("Missing EVM_PRIVATE_KEY in client/.env � run `npm run generate-wallet` first.");
   process.exit(1);
 }
 
 const resourceServerUrl = process.env.RESOURCE_SERVER_URL || "http://localhost:4021";
 const targetUrl = process.argv[2] || "https://example.com";
+const mode = process.argv[3] === "links" ? "links" : "fetch";
 
 const signer = privateKeyToAccount(privateKey);
 console.log(`Paying from wallet: ${signer.address}`);
@@ -31,7 +22,7 @@ registerExactEvmScheme(client, { signer });
 
 const fetchWithPayment = wrapFetchWithPayment(fetch, client);
 
-console.log(`Requesting a paid query for: ${targetUrl}`);
+console.log(`Requesting a paid query (mode="${mode}") for: ${targetUrl}`);
 console.log(`Against: ${resourceServerUrl}/api/queries`);
 console.log("");
 
@@ -39,7 +30,7 @@ try {
   const response = await fetchWithPayment(`${resourceServerUrl}/api/queries`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: targetUrl }),
+    body: JSON.stringify({ url: targetUrl, mode }),
   });
 
   const data = await response.json();

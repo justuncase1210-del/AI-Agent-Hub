@@ -50,11 +50,13 @@ export function createMcpServer() {
     {
       title: "Run a paid web-data query",
       description:
-        `Fetch a URL and extract title/description/text, paying in USDC via x402 (${config.x402.environment} networks). ` +
+        `Fetch a URL and extract structured data, paying in USDC via x402 (${config.x402.environment} networks). ` +
+        `mode "fetch" (default) returns title/description/text; mode "links" returns every outbound link. ` +
         `Call without paymentHeader first to receive the price + payment requirements; ` +
         `retry with paymentHeader set to a signed X-PAYMENT value to get the result.`,
       inputSchema: {
         url: z.string().url().describe("The URL to fetch and extract data from"),
+        mode: z.enum(["fetch", "links"]).optional().describe("Defaults to \"fetch\""),
         agentId: z.string().optional().describe("Your registered agent id, for attribution"),
         paymentHeader: z
           .string()
@@ -62,11 +64,56 @@ export function createMcpServer() {
           .describe("Signed x402 X-PAYMENT payload (base64). Omit on first call."),
       },
     },
-    async ({ url, agentId, paymentHeader }) => {
+    async ({ url, mode, agentId, paymentHeader }) => {
       const result = await callPaidRoute("POST", "/api/queries", {
-        body: { url, agentId },
+        body: { url, mode, agentId },
         paymentHeader,
       });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "extract_links",
+    {
+      title: "Extract all links from a page (paid)",
+      description:
+        "Convenience wrapper around run_query with mode=\"links\" — fetches a URL and " +
+        "returns every outbound link, resolved to absolute URLs and deduped. Same price " +
+        "and payment flow as run_query.",
+      inputSchema: {
+        url: z.string().url().describe("The URL to extract links from"),
+        agentId: z.string().optional(),
+        paymentHeader: z.string().optional(),
+      },
+    },
+    async ({ url, agentId, paymentHeader }) => {
+      const result = await callPaidRoute("POST", "/api/queries", {
+        body: { url, mode: "links", agentId },
+        paymentHeader,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "download_file",
+    {
+      title: "Download a stored file (paid)",
+      description:
+        "Pay in USDC via x402 to download a file previously stored via POST /api/storage/upload. " +
+        "Call without paymentHeader first to receive the price + payment requirements.",
+      inputSchema: {
+        fileId: z.string().describe("The fileId returned by the upload endpoint"),
+        paymentHeader: z.string().optional(),
+      },
+    },
+    async ({ fileId, paymentHeader }) => {
+      const result = await callPaidRoute("GET", `/api/storage/${fileId}`, { paymentHeader });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
