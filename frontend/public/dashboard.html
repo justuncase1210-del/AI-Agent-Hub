@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard — AI Agent Hub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>AI Agent Hub</h1>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="ads.html">Ads</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h2>Registered agents</h2>
+    <table class="table" id="agents-table">
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Registered</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Register a new agent</h2>
+    <form id="register-form" class="form">
+      <input type="text" name="name" placeholder="Agent name" required />
+      <input type="text" name="walletAddress" placeholder="Wallet address (optional)" />
+      <textarea name="description" placeholder="Description (optional)"></textarea>
+      <button type="submit">Register</button>
+    </form>
+    <pre id="register-result"></pre>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    loadAgents();
+
+    document.getElementById("register-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const body = Object.fromEntries(form.entries());
+      const res = await fetch(`${BACKEND_URL}/api/agents/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      document.getElementById("register-result").textContent = JSON.stringify(data, null, 2);
+      loadAgents();
+      e.target.reset();
+    });
+
+    async function loadAgents() {
+      const res = await fetch(`${BACKEND_URL}/api/agents`);
+      const { agents } = await res.json();
+      const tbody = document.querySelector("#agents-table tbody");
+      tbody.innerHTML = agents
+        .map(
+          (a) =>
+            `<tr><td>${a.id}</td><td>${a.name}</td><td>${new Date(
+              a.created_at
+            ).toLocaleString()}</td></tr>`
+        )
+        .join("");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: ai-agent-hub-backend
+    ports:
+      - "4021:4021"
+    env_file:
+      - .env
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - backend-data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ai-agent-hub-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_PUBLIC_URL=http://localhost:4021
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:

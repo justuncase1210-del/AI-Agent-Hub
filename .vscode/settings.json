@@ -1,0 +1,9 @@
+{
+  "editor.formatOnSave": true,
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/data": true
+  },
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "eslint.workingDirectories": ["backend", "frontend"]
+}

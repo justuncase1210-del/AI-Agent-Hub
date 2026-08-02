@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Agent Hub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>AI Agent Hub</h1>
+    <nav>
+      <a href="index.html" class="active">Overview</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="ads.html">Ads</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h2>Pay-per-call data &amp; automation for AI agents</h2>
+      <p>
+        x402-compliant endpoints, billed in USDC, no API keys. Also exposed
+        as MCP tools for MCP-native agents.
+      </p>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h3>POST /api/queries</h3>
+        <p>Run a paid data query.</p>
+        <code id="price-query">$0.01</code>
+      </div>
+      <div class="card">
+        <h3>POST /api/storage/upload</h3>
+        <p>Store a file.</p>
+        <code id="price-upload">$0.05</code>
+      </div>
+      <div class="card">
+        <h3>GET /api/storage/:id</h3>
+        <p>Download a stored file.</p>
+        <code id="price-download">$0.01</code>
+      </div>
+      <div class="card">
+        <h3>POST /api/ads/impression</h3>
+        <p>Buy an ad impression.</p>
+        <code id="price-ad">$0.001</code>
+      </div>
+    </section>
+
+    <section class="mcp-box">
+      <h3>MCP endpoint</h3>
+      <code id="mcp-url">/mcp</code>
+      <p>Point any MCP-capable agent at this URL to discover the tools above.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

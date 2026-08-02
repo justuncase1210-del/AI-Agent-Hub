@@ -1,0 +1,19 @@
+{
+  "name": "ai-agent-hub-client",
+  "version": "1.0.0",
+  "description": "Paying x402 client that buys from ai-agent-hub — proves the buyer side end to end",
+  "type": "module",
+  "scripts": {
+    "generate-wallet": "node generate-wallet.mjs",
+    "pay-for-query": "node payForQuery.mjs",
+    "pay-for-upload": "node payForUpload.mjs",
+    "pay-for-download": "node payForDownload.mjs"
+  },
+  "dependencies": {
+    "@x402/core": "latest",
+    "@x402/evm": "latest",
+    "@x402/fetch": "latest",
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.0"
+  }
+}

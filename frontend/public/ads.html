@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ads — AI Agent Hub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>AI Agent Hub</h1>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="ads.html" class="active">Ads</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h2>Active ads</h2>
+    <div id="ads-list" class="grid"></div>
+
+    <h2>Create an ad</h2>
+    <form id="ad-form" class="form">
+      <input type="text" name="title" placeholder="Title" required />
+      <textarea name="body" placeholder="Body"></textarea>
+      <input type="url" name="targetUrl" placeholder="Target URL" />
+      <button type="submit">Create ad</button>
+    </form>
+    <pre id="ad-result"></pre>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    loadAds();
+
+    document.getElementById("ad-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const body = Object.fromEntries(form.entries());
+      const res = await fetch(`${BACKEND_URL}/api/ads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      document.getElementById("ad-result").textContent = JSON.stringify(data, null, 2);
+      loadAds();
+      e.target.reset();
+    });
+
+    async function loadAds() {
+      const res = await fetch(`${BACKEND_URL}/api/ads`);
+      const { ads } = await res.json();
+      document.getElementById("ads-list").innerHTML = ads
+        .map(
+          (ad) => `
+        <div class="card">
+          <h3>${ad.title}</h3>
+          <p>${ad.body ?? ""}</p>
+          <code>id: ${ad.id}</code>
+        </div>`
+        )
+        .join("");
+    }
+  </script>
+</body>
+</html>
