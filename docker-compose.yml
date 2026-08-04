@@ -1,6 +1,22 @@
-version: "3.9"
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-agent-hub-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_agent_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -9,9 +25,16 @@ services:
       - "4021:4021"
     env_file:
       - .env
+    environment:
+      # Overrides .env's DATABASE_URL — inside the Docker network the
+      # Postgres container is reachable at hostname "postgres", not
+      # "localhost". Local (non-Docker) dev still uses .env's localhost value.
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_agent_hub
     volumes:
       - ./backend/uploads:/app/uploads
-      - backend-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -27,4 +50,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  backend-data:
+  postgres-data:

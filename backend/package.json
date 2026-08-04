@@ -9,6 +9,7 @@
     "dev": "nodemon src/index.js"
   },
   "dependencies": {
+    "undici": "^6.0.0",
     "@coinbase/cdp-sdk": "latest",
     "@x402/core": "latest",
     "@x402/evm": "latest",
@@ -16,7 +17,6 @@
     "@x402/extensions": "latest",
     "@x402/express": "latest",
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "better-sqlite3": "^11.3.0",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -24,6 +24,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nanoid": "^5.0.7",
+    "pg": "^8.13.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

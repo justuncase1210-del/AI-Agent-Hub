@@ -3,3 +3,5 @@ node_modules/
 backend/uploads/*
 !backend/uploads/.gitkeep
 *.log
+deploy/akash/deploy.local.yaml
+frontend/public/config.js

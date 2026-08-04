@@ -2,17 +2,14 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# native deps for better-sqlite3
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
-
+# pg is a pure-JS driver — no native build toolchain needed (unlike the
+# earlier better-sqlite3 setup).
 COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY . .
 
-RUN mkdir -p /app/uploads /app/data
+RUN mkdir -p /app/uploads
 
 EXPOSE 4021
 CMD ["node", "src/index.js"]

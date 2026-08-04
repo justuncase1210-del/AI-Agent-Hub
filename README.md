@@ -3,7 +3,7 @@
 x402-compliant marketplace for AI agents. Agents pay USDC (on Base) directly
 over HTTP — no API keys, no signup, no invoices — to buy:
 
-- **Data queries** (`/api/queries`) — paid: fetch a URL for title/description/text, or extract all outbound links (`mode: "links"`)
+- **Data queries** (`/api/queries`) — paid: `mode: "fetch"` for title/description/text, `"links"` for outbound links, `"images"` for image sources + alt text, `"metadata"` for meta tags + response headers
 - **Storage** (`/api/storage`) — paid file upload / download
 - **Ads** (`/api/ads`) — paid ad impressions/clicks for agent-facing surfaces
 - **Agent registry** (`/api/agents`) — agents register themselves, free tier
@@ -68,7 +68,7 @@ ai-agent-hub/
 │   │   ├── index.js             # Express app entrypoint
 │   │   ├── config.js            # env config loader
 │   │   ├── x402.js              # builds the CDP-backed X402Server + route pricing
-│   │   ├── db.js                # sqlite (lowdb-free, better-sqlite3) layer
+│   │   ├── db.js                # Postgres (pg) connection pool + schema
 │   │   ├── routes/
 │   │   │   ├── agents.js        # agent registration (free)
 │   │   │   ├── storage.js       # paid upload/download
@@ -89,6 +89,10 @@ ai-agent-hub/
 │   ├── payForDownload.mjs
 │   └── package.json
 ├── docker-compose.yml
+├── deploy/
+│   └── akash/
+│       ├── deploy.yaml          # SDL manifest (fill in before deploying)
+│       └── README.md            # step-by-step Akash deployment guide
 ├── .env.example
 └── README.md
 ```
@@ -283,6 +287,13 @@ Once you've verified the full buy/sell loop on testnet with `client/`:
    Bazaar. Once deployed, add that server's IP to your CDP API key's
    allowlist (portal.cdp.coinbase.com → the same screen where you opted
    out of allowlisting for local dev earlier).
+
+   **If deploying to Akash Network**: a ready-to-fill SDL manifest and
+   full step-by-step guide live in `deploy/akash/` — including the
+   architecture decision to use a managed Postgres provider instead of
+   self-hosting it on Akash, since Akash's persistent storage is tied to
+   the lease and is lost on redeploy/migration. See
+   `deploy/akash/README.md` before deploying.
 2. Flip `CDP_X402_SERVER_ENVIRONMENT=production` in the **backend's** `.env`.
 3. Point `X402_PAY_TO_ADDRESS` at a **real mainnet wallet you control** —
    double check this address before deploying; mainnet transactions are
@@ -308,9 +319,11 @@ Once you've verified the full buy/sell loop on testnet with `client/`:
   pinned to `latest` in `backend/package.json` since this ecosystem
   moves fast — run `npm install` then check `npm list` if you want to
   pin exact versions for reproducible builds.
-- `db.js` uses `better-sqlite3` for zero-config persistence; swap for
-  Postgres by editing `db.js` and `docker-compose.yml` if you need
-  concurrent writers at scale.
+- `db.js` uses `pg` against Postgres — docker-compose runs a `postgres:16-alpine`
+  service alongside the backend automatically; for local (non-Docker) dev,
+  point `DATABASE_URL` at any Postgres instance you have running. Schema is
+  created automatically on boot via `initDb()` (`CREATE TABLE IF NOT EXISTS`,
+  safe to run on every startup).
 - `routes/queries.js` fetches a single URL and extracts title/description/
   text via `cheerio` — swap `fetchPageData` for a real scraper, search
   API, or automation job runner as the catalog grows beyond simple fetches.

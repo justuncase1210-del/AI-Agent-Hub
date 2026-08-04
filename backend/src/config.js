@@ -2,6 +2,12 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Always load the .env at the project root (one level above backend/),
+// regardless of which directory `npm run dev` / `node src/index.js` is
+// actually invoked from. Without this, dotenv's default `import
+// "dotenv/config"` only looks in process.cwd(), which is backend/ when
+// you run `npm run dev` from inside that folder — so it silently misses
+// the root .env and every credential comes back undefined.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
@@ -43,11 +49,19 @@ export const config = {
   },
 
   db: {
-    url: process.env.DATABASE_URL || "./data/hub.sqlite",
+    // Postgres connection string. Local dev default assumes docker-compose's
+    // postgres service (or a locally installed Postgres) on 5432.
+    url: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/ai_agent_hub",
   },
 
   mcp: {
     transport: process.env.MCP_TRANSPORT || "http",
     path: process.env.MCP_PATH || "/mcp",
   },
+
+  // Optional outbound proxy for run_query's fetches. Full proxy URL
+  // including credentials, e.g. Webshare's rotating gateway:
+  //   http://username:password@p.webshare.io:80
+  // Leave unset to fetch directly with no proxy (default).
+  proxyUrl: process.env.OUTBOUND_PROXY_URL || "",
 };

@@ -1,21 +1,26 @@
-import Database from "better-sqlite3";
-import fs from "node:fs";
-import path from "node:path";
+import pg from "pg";
 import { config } from "./config.js";
 
-const dbDir = path.dirname(config.db.url);
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+const { Pool } = pg;
 
-export const db = new Database(config.db.url);
-db.pragma("journal_mode = WAL");
+/**
+ * Connection pool — reused across the app's lifetime, not per-request.
+ * pg handles pooling/reconnects internally; just import `pool` and query it.
+ */
+export const pool = new Pool({ connectionString: config.db.url });
 
-db.exec(`
+pool.on("error", (err) => {
+  // Idle client errors (e.g. connection dropped) shouldn't crash the process.
+  console.error("[db] Unexpected error on idle client", err);
+});
+
+const schema = `
   CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     wallet_address TEXT,
     description TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT now()
   );
 
   CREATE TABLE IF NOT EXISTS files (
@@ -25,7 +30,7 @@ db.exec(`
     mime_type TEXT,
     size_bytes INTEGER,
     uploaded_by TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT now()
   );
 
   CREATE TABLE IF NOT EXISTS query_log (
@@ -34,7 +39,7 @@ db.exec(`
     query_text TEXT,
     payer TEXT,
     amount TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT now()
   );
 
   CREATE TABLE IF NOT EXISTS ad_impressions (
@@ -43,7 +48,7 @@ db.exec(`
     agent_id TEXT,
     payer TEXT,
     amount TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT now()
   );
 
   CREATE TABLE IF NOT EXISTS ads (
@@ -51,9 +56,19 @@ db.exec(`
     title TEXT NOT NULL,
     body TEXT,
     target_url TEXT,
-    active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
   );
-`);
+`;
 
-export default db;
+/**
+ * Called once at boot (see index.js) before the app starts accepting
+ * requests — creates tables if they don't exist yet. Safe to run on
+ * every startup; CREATE TABLE IF NOT EXISTS is a no-op after the first run.
+ */
+export async function initDb() {
+  await pool.query(schema);
+  console.log("[db] schema ready");
+}
+
+export default pool;

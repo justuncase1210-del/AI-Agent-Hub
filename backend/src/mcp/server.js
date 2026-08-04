@@ -51,12 +51,16 @@ export function createMcpServer() {
       title: "Run a paid web-data query",
       description:
         `Fetch a URL and extract structured data, paying in USDC via x402 (${config.x402.environment} networks). ` +
-        `mode "fetch" (default) returns title/description/text; mode "links" returns every outbound link. ` +
+        `mode "fetch" (default) returns title/description/text; "links" returns outbound links; ` +
+        `"images" returns image sources + alt text; "metadata" returns all meta tags + response headers. ` +
         `Call without paymentHeader first to receive the price + payment requirements; ` +
         `retry with paymentHeader set to a signed X-PAYMENT value to get the result.`,
       inputSchema: {
         url: z.string().url().describe("The URL to fetch and extract data from"),
-        mode: z.enum(["fetch", "links"]).optional().describe("Defaults to \"fetch\""),
+        mode: z
+          .enum(["fetch", "links", "images", "metadata"])
+          .optional()
+          .describe("Defaults to \"fetch\""),
         agentId: z.string().optional().describe("Your registered agent id, for attribution"),
         paymentHeader: z
           .string()
@@ -215,6 +219,86 @@ export function createMcpServer() {
       });
       const data = await res.json();
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "list_agents",
+    {
+      title: "List registered agents",
+      description: "Free — list the most recently registered agents.",
+      inputSchema: {},
+    },
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/agents`);
+      const data = await res.json();
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "get_agent",
+    {
+      title: "Get agent details",
+      description: "Free — look up a single registered agent by id.",
+      inputSchema: {
+        agentId: z.string(),
+      },
+    },
+    async ({ agentId }) => {
+      const res = await fetch(`${BASE_URL}/api/agents/${agentId}`);
+      const data = await res.json();
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "extract_images",
+    {
+      title: "Extract all images from a page (paid)",
+      description:
+        "Convenience wrapper around run_query with mode=\"images\" — fetches a URL and " +
+        "returns every image source (resolved to absolute URLs) with alt text, deduped. " +
+        "Same price and payment flow as run_query.",
+      inputSchema: {
+        url: z.string().url().describe("The URL to extract images from"),
+        agentId: z.string().optional(),
+        paymentHeader: z.string().optional(),
+      },
+    },
+    async ({ url, agentId, paymentHeader }) => {
+      const result = await callPaidRoute("POST", "/api/queries", {
+        body: { url, mode: "images", agentId },
+        paymentHeader,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "get_metadata",
+    {
+      title: "Extract page metadata (paid)",
+      description:
+        "Convenience wrapper around run_query with mode=\"metadata\" — fetches a URL and " +
+        "returns all meta tags (Open Graph, Twitter Card, standard) plus a few response " +
+        "headers. Same price and payment flow as run_query.",
+      inputSchema: {
+        url: z.string().url().describe("The URL to extract metadata from"),
+        agentId: z.string().optional(),
+        paymentHeader: z.string().optional(),
+      },
+    },
+    async ({ url, agentId, paymentHeader }) => {
+      const result = await callPaidRoute("POST", "/api/queries", {
+        body: { url, mode: "metadata", agentId },
+        paymentHeader,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
     }
   );
 

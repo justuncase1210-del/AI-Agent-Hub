@@ -1,5 +1,9 @@
-// Point this at your backend. In docker-compose, the frontend container
-// still calls the backend from the *browser*, so use the host-mapped URL.
+// BACKEND_URL comes from config.js, generated at container startup from
+// the BACKEND_PUBLIC_URL environment variable — see generate-config.js.
+// Falls back to localhost for local dev (docker-compose sets the env var
+// explicitly; running `npm run dev` directly also regenerates config.js
+// from whatever BACKEND_PUBLIC_URL is in your shell, defaulting to
+// localhost:4021 if unset).
 const BACKEND_URL = window.BACKEND_URL || "http://localhost:4021";
 
 document.addEventListener("DOMContentLoaded", () => {

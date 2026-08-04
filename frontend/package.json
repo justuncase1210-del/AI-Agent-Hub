@@ -2,9 +2,10 @@
   "name": "ai-agent-hub-frontend",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "serve -l 3000 public",
-    "start": "serve -l 3000 public"
+    "dev": "node generate-config.js && serve -l 3000 public",
+    "start": "node generate-config.js && serve -l 3000 public"
   },
   "dependencies": {
     "serve": "^14.2.3"
