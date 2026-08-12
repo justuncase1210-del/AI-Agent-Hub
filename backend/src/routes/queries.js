@@ -7,39 +7,34 @@ import { pool } from "../db.js";
 import { logSettledPayment } from "../middleware/x402Payment.js";
 import { config } from "../config.js";
 
-// Built once at module load if OUTBOUND_PROXY_URL is set — reused across
-// requests rather than constructing a new agent per call. Stays undefined
-// (no proxying) when the env var is unset, which is the default.
 const proxyAgent = config.proxyUrl ? new ProxyAgent(config.proxyUrl) : undefined;
 if (proxyAgent) {
-  // Redact credentials before logging — proxyUrl is user:pass@host:port.
   const redacted = config.proxyUrl.replace(/\/\/[^@]+@/, "//<redacted>@");
   console.log(`[queries] outbound fetches routed through proxy: ${redacted}`);
 } else {
-  console.log("[queries] no outbound proxy configured — fetching directly");
+  console.log("[queries] no outbound proxy configured - fetching directly");
 }
 
 const router = Router();
 
 const querySchema = z.object({
   url: z.string().url(),
-  mode: z.enum(["fetch", "links", "images", "metadata"]).default("fetch"),
+  mode: z.enum(["fetch", "links", "images", "metadata", "json"]).default("fetch"),
   agentId: z.string().optional(),
 });
 
 /**
- * PAID — protected by x402PaymentMiddleware in index.js ("POST /api/queries").
+ * PAID - protected by x402PaymentMiddleware in index.js ("POST /api/queries").
  *
- * Four modes on the same priced route:
- *   - "fetch" (default): title, meta description, plain-text snippet.
- *   - "links": every outbound <a href> on the page, resolved + deduped.
- *   - "images": every <img src> on the page, resolved + deduped, with alt text.
- *   - "metadata": all <meta> tags (Open Graph, Twitter Card, standard) as a
- *     flat key/value map, plus response headers from the upstream fetch.
- *
- * Swap the extract* functions for a real scraper, search API, database
- * lookup, or automation job runner as the catalog grows — the payment gate
- * and logging around it don't need to change either way.
+ * Five modes on the same priced route:
+ *   - "fetch" (default): title, meta description, plain-text snippet, from an HTML page.
+ *   - "links": every outbound <a href> on an HTML page, resolved + deduped.
+ *   - "images": every <img src> on an HTML page, resolved + deduped, with alt text.
+ *   - "metadata": all <meta> tags on an HTML page, plus response headers.
+ *   - "json": fetches a URL expected to return JSON directly (APIs, data
+ *     feeds) and returns the parsed body as-is. Added because the other
+ *     four modes all hard-required text/html and would reject any real
+ *     JSON API outright - a genuine gap, not a deliberate restriction.
  */
 router.post("/", async (req, res) => {
   const parsed = querySchema.safeParse(req.body);
@@ -48,17 +43,17 @@ router.post("/", async (req, res) => {
   }
 
   logSettledPayment(req, "queries");
-
   const { url, mode, agentId } = parsed.data;
 
   let result;
   try {
-    const { html, headers } = await fetchHtml(url);
-    result = runExtractor(mode, html, url, headers);
+    if (mode === "json") {
+      result = await fetchJson(url);
+    } else {
+      const { html, headers } = await fetchHtml(url);
+      result = runExtractor(mode, html, url, headers);
+    }
   } catch (err) {
-    // Payment has already settled by the time this handler runs, so a
-    // failed fetch still needs a real response — return the error as
-    // the paid result rather than silently succeeding with nothing.
     return res.status(502).json({
       error: "fetch_failed",
       message: err.message,
@@ -74,12 +69,16 @@ router.post("/", async (req, res) => {
   res.json({ url, mode, result });
 });
 
-async function fetchHtml(url) {
+/// Fetches a URL expected to return JSON (a real API, a data feed) and
+/// returns the parsed body directly. Same proxy, timeout, and User-Agent
+/// as fetchHtml - just a different Accept header and no HTML parsing.
+async function fetchJson(url) {
   const response = await fetch(url, {
-    headers: { "User-Agent": "AI-Agent-Hub/1.0 (+https://github.com)" },
+    headers: {
+      "User-Agent": "AI-Agent-Hub/1.0 (+https://github.com)",
+      "Accept": "application/json",
+    },
     signal: AbortSignal.timeout(10_000),
-    // Routes through Webshare (or any configured proxy) when
-    // OUTBOUND_PROXY_URL is set; native, unproxied fetch otherwise.
     ...(proxyAgent && { dispatcher: proxyAgent }),
   });
 
@@ -88,10 +87,35 @@ async function fetchHtml(url) {
   }
 
   const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json") && !contentType.includes("text/json")) {
+    // Some real APIs mislabel their content-type - try parsing anyway
+    // rather than reject outright, but only after a stricter check
+    // failed, so a genuinely wrong URL still errors clearly.
+    const text = await response.text();
+    try {
+      return { data: JSON.parse(text), fetchedAt: new Date().toISOString(), note: "content-type was not application/json, but parsed successfully anyway" };
+    } catch {
+      throw new Error(`Expected JSON, got ${contentType || "unknown content-type"} and body did not parse as JSON either`);
+    }
+  }
+
+  const data = await response.json();
+  return { data, fetchedAt: new Date().toISOString() };
+}
+
+async function fetchHtml(url) {
+  const response = await fetch(url, {
+    headers: { "User-Agent": "AI-Agent-Hub/1.0 (+https://github.com)" },
+    signal: AbortSignal.timeout(10_000),
+    ...(proxyAgent && { dispatcher: proxyAgent }),
+  });
+  if (!response.ok) {
+    throw new Error(`Upstream returned ${response.status} ${response.statusText}`);
+  }
+  const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/html")) {
     throw new Error(`Expected text/html, got ${contentType || "unknown content-type"}`);
   }
-
   const headers = Object.fromEntries(response.headers.entries());
   const html = await response.text();
   return { html, headers };
@@ -115,7 +139,6 @@ function extractPageData(html) {
   const title = $("title").first().text().trim();
   const description = $('meta[name="description"]').attr("content")?.trim() || "";
   const bodyText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 1000);
-
   return {
     title,
     description,
@@ -127,28 +150,25 @@ function extractPageData(html) {
 function extractLinks(html, baseUrl) {
   const $ = cheerio.load(html);
   const seen = new Set();
-
   $("a[href]").each((_, el) => {
     const href = $(el).attr("href");
     if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
     try {
       seen.add(new URL(href, baseUrl).toString());
     } catch {
-      // Malformed href — skip rather than fail the whole request.
+      // Malformed href - skip rather than fail the whole request.
     }
   });
-
   return {
     linkCount: seen.size,
-    links: Array.from(seen).slice(0, 200), // cap payload size
+    links: Array.from(seen).slice(0, 200),
     fetchedAt: new Date().toISOString(),
   };
 }
 
 function extractImages(html, baseUrl) {
   const $ = cheerio.load(html);
-  const seen = new Map(); // absolute URL -> alt text (dedupe by URL)
-
+  const seen = new Map();
   $("img[src]").each((_, el) => {
     const src = $(el).attr("src");
     if (!src || src.startsWith("data:")) return;
@@ -158,10 +178,9 @@ function extractImages(html, baseUrl) {
         seen.set(absolute, $(el).attr("alt")?.trim() || "");
       }
     } catch {
-      // Malformed src — skip rather than fail the whole request.
+      // Malformed src - skip rather than fail the whole request.
     }
   });
-
   return {
     imageCount: seen.size,
     images: Array.from(seen.entries())
@@ -174,13 +193,11 @@ function extractImages(html, baseUrl) {
 function extractMetadata(html, headers) {
   const $ = cheerio.load(html);
   const meta = {};
-
   $("meta").each((_, el) => {
     const name = $(el).attr("name") || $(el).attr("property");
     const content = $(el).attr("content");
     if (name && content !== undefined) meta[name] = content;
   });
-
   return {
     meta,
     responseHeaders: {

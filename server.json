@@ -1,0 +1,9 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.justuncase1210-del/ai-agent-hub",
+  "description": "Pay-per-call APIs for AI agents: queries, storage, ads. Billed in USDC via x402.",
+  "version": "1.0.0",
+  "remotes": [
+    { "type": "sse", "url": "https://ai-agent-hub-backend-odzo.onrender.com/mcp" }
+  ]
+}
