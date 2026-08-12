@@ -2,8 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AI Agent Hub</title>
+  <title>AI Agent Hub - Pay-Per-Call APIs for AI Agents, Billed in USDC</title>
+  <meta name="description" content="AI Agent Hub is a pay-per-call API platform for AI agents: data queries, file storage, and ad impressions, billed automatically in USDC via the x402 protocol, with no API keys and no signup. Also available as MCP tools." />
   <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "AI Agent Hub",
+        "url": "https://ai-agent-hub-frontend-v3.onrender.com",
+        "description": "A pay-per-call API platform for AI agents, billed automatically in USDC via the x402 protocol, with no API keys and no signup required."
+      },
+      {
+        "@type": "WebSite",
+        "name": "AI Agent Hub",
+        "url": "https://ai-agent-hub-frontend-v3.onrender.com",
+        "description": "x402-compliant, pay-per-call endpoints for data queries, file storage, and ad impressions - billed in USDC, no API keys. Also exposed as MCP tools for MCP-native agents."
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is AI Agent Hub?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AI Agent Hub is a set of pay-per-call API endpoints built for AI agents: running data queries, storing and retrieving files, and buying ad impressions. Every call is billed automatically in USDC using the x402 protocol - there is no API key, no account, and no subscription."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does billing work without an API key?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Each endpoint uses the x402 protocol: a request without payment gets a 402 response specifying the price, the agent's wallet signs a USDC payment, and the request is retried with that payment attached. No account creation or API key is ever required."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What can I do with AI Agent Hub's API?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Four endpoints: POST /api/queries runs a paid data query, POST /api/storage/upload stores a file, GET /api/storage/:id downloads a stored file, and POST /api/ads/impression buys an ad impression. Current prices are shown live on this page."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does AI Agent Hub support MCP?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Any MCP-capable agent can connect directly to the /mcp endpoint to discover and call the same tools available via the REST API."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -14,16 +71,13 @@
       <a href="ads.html">Ads</a>
     </nav>
   </header>
-
   <main class="container">
     <section class="hero">
-      <h2>Pay-per-call data &amp; automation for AI agents</h2>
+      <h2>AI Agent Hub is a pay-per-call API platform for AI agents</h2>
       <p>
-        x402-compliant endpoints, billed in USDC, no API keys. Also exposed
-        as MCP tools for MCP-native agents.
+        Every call is billed automatically in USDC using the x402 protocol - there is no API key, no account, and no signup. Agents get instant access to data queries, file storage, and ad impressions, paying only for what they actually use. The same tools are also exposed natively over MCP, so any MCP-capable agent can discover and call them directly without touching the REST API at all.
       </p>
     </section>
-
     <section class="grid">
       <div class="card">
         <h3>POST /api/queries</h3>
@@ -46,14 +100,12 @@
         <code id="price-ad">$0.001</code>
       </div>
     </section>
-
     <section class="mcp-box">
       <h3>MCP endpoint</h3>
       <code id="mcp-url">/mcp</code>
       <p>Point any MCP-capable agent at this URL to discover the tools above.</p>
     </section>
   </main>
-
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
