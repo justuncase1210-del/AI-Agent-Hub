@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node generate-config.js && serve -l 3000 public",
-    "start": "node generate-config.js && serve -l 3000 public"
+    "start": "node generate-config.js && serve -l ${PORT:-3000} public"
   },
   "dependencies": {
     "serve": "^14.2.3"
