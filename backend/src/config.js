@@ -46,6 +46,10 @@ export const config = {
     storageDownload: process.env.PRICE_STORAGE_DOWNLOAD || "0.01",
     adImpression: process.env.PRICE_AD_IMPRESSION || "0.001",
     agentRegister: process.env.PRICE_AGENT_REGISTER || "0.00",
+    // Flat price for every service proxied through /api/svc/:slug (see
+    // routes/services.js and x402.js — per-slug pricing isn't supported
+    // by the x402 SDK's static routeConfig map yet).
+    svcProxy: process.env.PRICE_SVC_PROXY || "0.10",
   },
 
   db: {
@@ -64,4 +68,11 @@ export const config = {
   //   http://username:password@p.webshare.io:80
   // Leave unset to fetch directly with no proxy (default).
   proxyUrl: process.env.OUTBOUND_PROXY_URL || "",
+
+  // Shared-secret header required by POST /api/services/register — the
+  // only thing standing between the public internet and being able to
+  // point an arbitrary slug at any target_url on this app's billing.
+  // Set a long random value in .env; leave unset and /register will
+  // safely refuse everything with 401.
+  adminToken: process.env.ADMIN_TOKEN || "",
 };

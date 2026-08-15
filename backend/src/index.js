@@ -10,6 +10,8 @@ import storageRouter from "./routes/storage.js";
 import queriesRouter from "./routes/queries.js";
 import adsRouter from "./routes/ads.js";
 import routeRouter from "./routes/route.js";
+import servicesRouter from "./routes/services.js";
+import servicesAdminRouter from "./routes/servicesAdmin.js";
 
 async function main() {
   const app = express();
@@ -35,6 +37,18 @@ async function main() {
   // Semantic router - free discovery endpoint. Not in x402.js's
   // routeConfig, so it passes through the payment middleware untouched.
   app.use("/api/route", routeRouter);
+  // Admin-only service registration. Deliberately a DIFFERENT path
+  // prefix than /api/svc below — it must never share a prefix with the
+  // priced proxy, or x402's wildcard match on "/api/svc/:slug" will
+  // intercept it as a paid call to a service named "register" (this
+  // happened once; see routes/servicesAdmin.js for the full story).
+  // Not in x402.js's routeConfig, so it passes through free — access
+  // is instead controlled by the x-admin-token header check inside.
+  app.use("/api/services", servicesAdminRouter);
+  // Registered third-party services (e.g. sovereign-agent's Akash-hosted
+  // deploys) — priced proxy, gated by x402.js's "GET/POST /api/svc/:slug"
+  // routeConfig entries.
+  app.use("/api/svc", servicesRouter);
 
   attachMcpHttp(app, config.mcp.path);
 

@@ -142,6 +142,28 @@ export const routeConfig = {
       },
     }),
   },
+
+  /**
+   * Proxies to any service registered via POST /api/services/register
+   * (see routes/services.js). Every registered slug shares this single
+   * flat price — the CDP x402 SDK prices by exact route string in this
+   * routeConfig map, so true per-slug pricing isn't supported here
+   * without a deeper change to how the SDK resolves price. Revisit if/when
+   * multiple registered services need different prices.
+   *
+   * Declared per-method (not "ALL") — the SDK's bazaar validation only
+   * accepts GET/HEAD/DELETE/POST/PUT/PATCH, "ALL" fails silently at boot
+   * with "info.input.method must be one of ... got ALL". Add more methods
+   * here if a registered service needs PUT/DELETE/etc.
+   */
+  "GET /api/svc/:slug": {
+    price: `$${config.prices.svcProxy}`,
+    description: "Call a registered third-party service (e.g. sovereign-agent deployed services)",
+  },
+  "POST /api/svc/:slug": {
+    price: `$${config.prices.svcProxy}`,
+    description: "Call a registered third-party service (e.g. sovereign-agent deployed services)",
+  },
 };
 
 /**
