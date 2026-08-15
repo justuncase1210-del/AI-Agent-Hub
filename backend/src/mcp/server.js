@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { config } from "../config.js";
+import { pool } from "../db.js";
 
 const BASE_URL = process.env.BACKEND_PUBLIC_URL || `http://localhost:${config.port}`;
 
@@ -39,7 +40,78 @@ async function callPaidRoute(method, path, { body, paymentHeader } = {}) {
   };
 }
 
-export function createMcpServer() {
+/**
+ * Registers one MCP tool per row currently in registered_services (see
+ * routes/services.js / servicesAdmin.js — these are third-party services,
+ * e.g. sovereign-agent's Akash-hosted deploys, proxied through the flat
+ * priced route /api/svc/:slug). Called fresh on every request (see
+ * createMcpServer below, which is itself called per-request already —
+ * see attachMcpHttp) so newly registered or removed services show up
+ * without needing a redeploy or any manual tool-list maintenance.
+ *
+ * The table doesn't store each service's HTTP method (GET vs POST — our
+ * 7 services tonight are a genuine mix), so the generated tool exposes
+ * `method` as an explicit parameter rather than guessing it. `queryParams`
+ * covers GET-style calls (appended to the URL), `body` covers POST-style
+ * calls (sent as JSON) — an agent picks whichever fits the service it's
+ * calling, same as it would need to know for any REST API.
+ */
+async function registerDynamicServiceTools(server) {
+  let rows;
+  try {
+    const result = await pool.query(
+      `SELECT slug, description FROM registered_services ORDER BY slug`
+    );
+    rows = result.rows;
+  } catch (err) {
+    console.error("[mcp] failed to load registered_services for dynamic tools:", err);
+    return;
+  }
+
+  for (const { slug, description } of rows) {
+    server.registerTool(
+      `call_${slug.replace(/-/g, "_")}`,
+      {
+        title: `Call ${slug} (paid)`,
+        description:
+          `${description || slug} — a third-party service registered on this platform, ` +
+          `paid via x402 (flat $${config.prices.svcProxy} per call, ${config.x402.environment} networks). ` +
+          `Call without paymentHeader first to receive the price + payment requirements; ` +
+          `retry with paymentHeader set to a signed X-PAYMENT value to get the result.`,
+        inputSchema: {
+          method: z
+            .enum(["GET", "POST"])
+            .default("GET")
+            .describe("HTTP method this service expects — check its description or try GET first"),
+          queryParams: z
+            .record(z.string())
+            .optional()
+            .describe("For GET calls: query-string parameters as key/value pairs"),
+          body: z
+            .record(z.any())
+            .optional()
+            .describe("For POST calls: JSON body to send"),
+          paymentHeader: z
+            .string()
+            .optional()
+            .describe("Signed x402 X-PAYMENT payload (base64). Omit on first call."),
+        },
+      },
+      async ({ method, queryParams, body, paymentHeader }) => {
+        let path = `/api/svc/${slug}`;
+        if (method === "GET" && queryParams && Object.keys(queryParams).length > 0) {
+          path += `?${new URLSearchParams(queryParams).toString()}`;
+        }
+        const result = await callPaidRoute(method, path, { body, paymentHeader });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+    );
+  }
+}
+
+export async function createMcpServer() {
   const server = new McpServer({
     name: "ai-agent-hub",
     version: "1.0.0",
@@ -138,9 +210,6 @@ export function createMcpServer() {
       },
     },
     async ({ filename, contentBase64, paymentHeader }) => {
-      // Multipart isn't convenient over a JSON tool call, so this tool
-      // documents intent; wire it to a multipart-capable fetch if you
-      // need agents to upload arbitrary binaries via MCP directly.
       return {
         content: [
           {
@@ -302,6 +371,8 @@ export function createMcpServer() {
     }
   );
 
+  await registerDynamicServiceTools(server);
+
   return server;
 }
 
@@ -312,7 +383,7 @@ export function createMcpServer() {
  */
 export function attachMcpHttp(app, mountPath) {
   app.all(mountPath, async (req, res) => {
-    const server = createMcpServer();
+    const server = await createMcpServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless
     });
