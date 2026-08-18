@@ -17,7 +17,7 @@ async function main() {
   const app = express();
 
   app.set("trust proxy", true);
-  app.use(cors());
+  app.use(cors({ exposedHeaders: ["payment-required"] }));
   app.use(morgan(config.nodeEnv === "development" ? "dev" : "combined"));
   app.use(express.json());
 
