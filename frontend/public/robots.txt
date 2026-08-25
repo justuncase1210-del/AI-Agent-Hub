@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ai-agent-hub-6jo6.onrender.com/sitemap.xml
