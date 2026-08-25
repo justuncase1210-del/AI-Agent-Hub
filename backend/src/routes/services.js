@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db.js";
 import { logSettledPayment } from "../middleware/x402Payment.js";
+import { internalHandlers } from "../internalServices.js";
 
 const router = Router();
 
@@ -34,6 +35,21 @@ router.all("/:slug", async (req, res) => {
     logSettledPayment(req, `svc:${slug}`);
 
     const { target_url, endpoint_path } = result.rows[0];
+
+    // "internal://self" means this slug is backed by a handler in
+    // internalServices.js rather than an external target -- call it
+    // directly, no outbound fetch, no third-party infra to keep alive.
+    if (target_url === "internal://self") {
+        const handler = internalHandlers[slug];
+        if (!handler) {
+            return res.status(500).json({ error: "internal_handler_missing", slug });
+        }
+        const { status, body, contentType } = await handler(req);
+        return res.status(status).type(contentType).send(
+            contentType === "application/json" ? JSON.stringify(body) : body
+        );
+    }
+
     const qsIndex = req.originalUrl.indexOf("?");
     const queryString = qsIndex >= 0 ? req.originalUrl.slice(qsIndex) : "";
     const target = new URL((endpoint_path || "/") + queryString, target_url);

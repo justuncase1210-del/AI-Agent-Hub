@@ -24,6 +24,21 @@ const router = Router();
  * so the target service's own route shape (e.g. /check) never has to
  * leak into the client-facing, priced URL.
  */
+/**
+ * ADMIN-ONLY — lists every registered_services row as-is, so the
+ * operator can audit what each slug actually points to (external
+ * target_url vs "internal://self") without touching the DB directly.
+ */
+router.get("/", async (req, res) => {
+    if (!config.adminToken || req.headers["x-admin-token"] !== config.adminToken) {
+        return res.status(401).json({ error: "unauthorized" });
+    }
+    const result = await pool.query(
+        `SELECT slug, target_url, endpoint_path, description, created_at FROM registered_services ORDER BY slug`
+    );
+    res.json({ services: result.rows });
+});
+
 router.post("/register", async (req, res) => {
     if (!config.adminToken || req.headers["x-admin-token"] !== config.adminToken) {
         return res.status(401).json({ error: "unauthorized" });
